@@ -1,6 +1,7 @@
 include { GET_FASTA             } from '../../modules/local/get_fasta'
 include { BOWTIE2_ANNOTATION    } from '../../modules/local/bowtie2_annotation'
 include { MERGE_ANNOTATIONS     } from '../../modules/local/merge_annotations'
+include { SPLICING_ANNOTATION   } from '../../modules/local/splicing_annotation'
 
 
 workflow ANNOTATE {
@@ -54,6 +55,13 @@ workflow ANNOTATE {
     MERGE_ANNOTATIONS(
         anchor_hits_samplesheet,
         target_hits_samplesheet
+    )
+
+
+    SPLICING_ANNOTATION(
+        GET_FASTA.out.anchor_fasta,
+        GET_FASTA.out.target_fasta,
+        ch_indices
     )
 
 }
