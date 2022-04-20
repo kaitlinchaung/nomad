@@ -2,7 +2,6 @@
 
 from Bio import SeqIO
 
-
 class Read():
     """
     Object for a fastq read
@@ -10,39 +9,32 @@ class Read():
     def __init__(self, read):
         self.read = read
 
-    def get_anchors(self, anchor_mode, window_slide, lookahead, kmer_size):
+    def get_anchor_target_list(self, anchor_mode, window_slide, lookahead, kmer_size):
         """
-        Get list of chunked anchors from read
+        Returns a list of valid (anchor, target) from a read
         """
+        # initialise
+        anchor_target_list = []
+
+        # define, chunk will be disjoint while tile will be overlapping
         if anchor_mode == 'chunk':
             step_size = kmer_size
         elif anchor_mode == 'tile':
             step_size = window_slide
 
+        # only parse read up to where it is possible to have a valid target
         last_base = len(self.read) - (lookahead + 2 * kmer_size)
-        anchor_list = [
-            self.read[0+i:kmer_size+i]
-            for i
-            in range(0, last_base, step_size)
-            if (len(self.read[0+i:kmer_size+i])==kmer_size) and ("N" not in self.read[0+i:kmer_size+i])
-        ]
-        return anchor_list
 
-    def get_target(self, anchor, lookahead, kmer_size):
-        """
-        Get targets for a given anchor that are size=target_len and target_dist away from the anchor
-        """
-        # get anchor position
-        anchor_end = self.read.index(anchor) + len(anchor)
+        for i in range(0, last_base, step_size):
+            # get anchor
+            anchor = self.read[0+i : kmer_size+i]
 
-        # get target position
-        target_start = anchor_end + lookahead
-        target_end = target_start + kmer_size
+            # get target start and end positions, as a function of anchor end
+            target_start = (kmer_size+i) + lookahead
+            target_end = target_start + kmer_size
 
-        target = self.read[target_start:target_end]
+            # get target
+            target = self.read[target_start:target_end]
 
-        # if adj anchor exists, add adj anchor to anchor_dict
-        if (len(target) == kmer_size) and ("N" not in target):
-            return target
-        else:
-            return None
+            if "N" not in anchor and "N" not in target:
+                anchor_target_list.append((anchor, target))
