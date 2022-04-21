@@ -15,8 +15,7 @@ from datetime import datetime
 import logging
 import time
 import utils
-import Anchors
-import Reads
+import Dicts
 
 
 def get_args():
@@ -123,7 +122,7 @@ def main():
         use_std = True
     elif args.use_std == "false":
         use_std = False
-    # if sampelsheet only has 1 column, force use_std
+    # if samplesheet only has 1 column, force use_std
     if sample_list.shape[1] == 1:
         use_std = True
 
@@ -136,8 +135,8 @@ def main():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # logging: print input parametrs
-    utils.log_params(args, use_std)
+    # # logging: print input parametrs
+    # utils.log_params(args, use_std)
 
     # get list of samples from fastq_files (if fastq_file = "file1.fastq.gz", sample = "file1")
     samples = (
@@ -158,89 +157,63 @@ def main():
     )
 
     # initialise objects
-    anchor_counts = Anchors.AnchorCounts(len(samples))                          # {anchor : counts}
-    anchor_targets_samples = Anchors.AnchorTargetsSamples(sample_index_dict)    # {anchor : {target : [sample_1_count, ...]}}
-    anchor_targets = Anchors.AnchorTargets()                                    # {anchor : targets}
-    anchor_topTargets_scores = Anchors.AnchorTopTargetsScores()                 # {anchor : scores]}
-    anchor_topTargets_distances = Anchors.AnchorTopTargetsDistances()           # {anchor : {targets : distance}}
-    anchor_status = Anchors.AnchorStatus()                                      # [anchor1, anchor2]
-    status_checker = Anchors.StatusChecker(
-        anchor_counts,
+    anchor_abundance = Dicts.AnchorAbundance(args.anchor_freeze_threshold, len(samples))
+    anchor_targets_samples = Dicts.AnchorTargetsSamples(sample_index_dict)
+    anchor_targets_scores = Dicts.AnchorTargetsScores()
+    anchor_targets_distances = Dicts.AnchorTargetsDistances()
+    ignorelist = Dicts.Ignorelist(
+        anchor_abundance,
         anchor_targets_samples,
-        anchor_targets,
-        anchor_topTargets_scores,
-        anchor_topTargets_distances,
-        anchor_status,
+        anchor_targets_scores,
+        anchor_targets_distances,
         args.max_ignorelist
-    )
+        )
 
     # begin iterations
     for iteration in range(1, args.n_iterations+1):
 
-        # if we are at more than read_freeze_threshold reads, set the read_counter freeze so that we don't add any more anchors
-        # if we are at more than read_freeze_threshold reads, clear the ignorelist
         num_reads = iteration * args.max_reads
-        if num_reads >= args.read_freeze_threshold:
-            read_counter_freeze = True
-            status_checker.ignorelist.clear()
-        else:
-            read_counter_freeze = False
 
         # get reads from this iteration's fastq files
-        read_chunk = utils.get_read_chunk(iteration, samples, args.n_iterations)
+        read_chunk = utils.get_read_chunk(
+            iteration,
+            samples,
+            args.n_iterations
+        )
 
         # accumulate anchors for this iteration
         utils.get_iteration_summary_scores(
-            args.score_type,
-            iteration,
             read_chunk,
+            iteration,
+            anchor_abundance,
+            anchor_targets_samples,
+            anchor_targets_scores,
+            anchor_targets_distances,
+            ignorelist,
+            group_ids_dict,
             args.kmer_size,
             args.lookahead,
             args.max_reads,
-            anchor_counts,
-            anchor_targets_samples,
-            anchor_targets,
-            anchor_topTargets_scores,
-            anchor_topTargets_distances,
-            anchor_status,
-            status_checker,
-            read_counter_freeze,
             args.target_counts_threshold,
             args.anchor_counts_threshold,
             args.anchor_freeze_threshold,
             args.anchor_mode,
             args.window_slide,
-            args.compute_target_distance,
-            group_ids_dict,
-            args.distance_type
+            args.distance_type,
+            args.score_type
         )
-
-
-        # scores threshold : only continue accumulations if we have less than num_keep_anchors anchors with candidate scores
-        # only do this iterative version if we are using the slow score
-        if args.score_type == "slow" and len(anchor_topTargets_scores) >= args.num_keep_anchors:
-            utils.ignorelist_scores(
-                anchor_topTargets_scores,
-                status_checker,
-                use_std,
-                read_counter_freeze
-            )
 
         # abundance threshold: ignorelist anchors that don't meet an abundance requirement
         utils.ignorelist_abundance(
-            anchor_counts,
-            status_checker,
+            anchor_abundance,
+            ignorelist,
             num_reads,
             args.c_type,
-            samples,
-            read_counter_freeze
+            samples
         )
 
-    ## done with all iterations ##
-
-    if args.score_type == "fast":
-        for anchor in anchor_topTargets_scores:
-            # get scores for each anchor
+        # get scores for each anchor
+        for anchor in anchor_targets_scores.dict:
             scores, _, _ = utils.compute_phase_1_scores(
                 anchor_targets_samples.get_anchor_counts_df(anchor),
                 group_ids_dict,
@@ -250,10 +223,10 @@ def main():
             )
 
             # updates scores for each anchor
-            anchor_topTargets_scores.initialise(anchor, scores)
+            anchor_targets_scores.initialise(anchor, scores)
 
     # after all iterations are done accumulating, calculate the summary score
-    keep_anchors = anchor_topTargets_scores.get_final_anchors(args.num_keep_anchors, use_std)
+    keep_anchors = anchor_targets_scores.get_final_anchors(args.num_keep_anchors, use_std)
 
     # filter for these anchors and drop any duplicates
     final_anchors = (
