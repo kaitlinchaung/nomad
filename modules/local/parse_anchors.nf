@@ -15,7 +15,7 @@ process PARSE_ANCHORS {
     val lookahead
 
     output:
-    path "*_target_counts.tsv"  , emit: targets
+    path "*_target_counts.tsv"  , emit: targets               , optional: true
     path "*.fasta"              , emit: consensus_fasta
     path "*.tab"                , emit: consensus_stats
     path "*log"                 , emit: log

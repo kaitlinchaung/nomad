@@ -14,13 +14,15 @@ process GET_ANCHORS_AND_SCORES {
     val run_type
 
     output:
-    path outfile_scores , emit: scores
-    path outfile_anchors, emit: anchors
-    path "cmx*"          , emit: cmx
+    path outfile_scores                 , emit: scores
+    path outfile_anchors                , emit: anchors
+    path "cmx*"                         , emit: cmx
+    path "anchor_target_counts.tsv"     , emit: anchor_target_counts, optional: true
+    path "top_targets.tsv"              , emit: top_targets         , optional: true
 
     script:
-    outfile_scores      = "scores.tsv"
-    outfile_anchors     = "anchors.tsv"
+    outfile_scores                      = "scores.tsv"
+    outfile_anchors                     = "anchors.tsv"
     """
     get_anchors.R \\
         ${counts} \\

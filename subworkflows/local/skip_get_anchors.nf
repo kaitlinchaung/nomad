@@ -13,64 +13,11 @@ include { POSTPROCESSING            } from '../../modules/local/postprocessing'
 
 workflow SKIP_GET_ANCHORS {
 
+    take:
+    ch_fastqs
+    lookahead
+
     main:
-
-    // Parse samplesheet
-    Channel
-        .fromPath(params.input)
-        .splitCsv(
-            header: false
-        )
-        .map { row ->
-            tuple(
-                file(row[0]).simpleName,
-                file(row[0]),
-                row[1]
-            )
-        }
-        .set{ ch_fastqs }
-
-    // Define lookahead parameter
-    if (params.use_read_length) {
-        /*
-        // Get read length of dataset
-        */
-        GET_READ_LENGTH(
-            ch_fastqs.first()
-        )
-        read_length = GET_READ_LENGTH.out.read_length.toInteger()
-        lookahead = ((read_length - 2 * params.kmer_size) / 2).toInteger()
-
-    } else {
-        lookahead = params.lookahead
-    }
-
-    // /*
-    // // Trim fastqs
-    // */
-    // TRIMGALORE(
-    //     ch_fastqs
-    // )
-
-    // /*
-    // // Check if we are only using unmapped reads
-    // */
-    // if (params.unmapped) {
-    //     /*
-    //     // Get unmapped reads
-    //     */
-    //     GET_UNMAPPED(
-    //         TRIMGALORE.out.fastq,
-    //         params.index_bowtie
-    //     )
-
-    //     ch_fastqs = GET_UNMAPPED.out.fastq
-
-    // } else {
-    //     ch_fastqs = TRIMGALORE.out.fastq
-
-    // }
-
 
     /*
     // Process to get consensus sequences and target counts for annchors

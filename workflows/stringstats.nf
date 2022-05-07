@@ -29,16 +29,18 @@ def modules = params.modules.clone()
 //
 // MODULE: Local to the pipeline
 //
-include { GET_SOFTWARE_VERSIONS } from '../modules/local/get_software_versions' addParams( options: [publish_files : ['tsv':'']] )
+include { GET_SOFTWARE_VERSIONS     } from '../modules/local/get_software_versions' addParams( options: [publish_files : ['tsv':'']] )
+include { GET_READ_LENGTH           } from '../../modules/local/get_read_length'
+include { GET_UNMAPPED              } from '../../modules/local/get_unmapped'
+
 
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
-include { ANALYZE_FASTQS    } from '../subworkflows/local/analyze_fastqs'
+include { ANALYZE_BULK      } from '../subworkflows/local/analyze_bulk'
+include { ANALYZE_10X    } from '../subworkflows/local/analyze_10X'
 include { ANNOTATE          } from '../subworkflows/local/annotate'
 include { SKIP_GET_ANCHORS  } from '../subworkflows/local/skip_get_anchors'
-
-
 
 /*
 ========================================================================================
@@ -49,6 +51,7 @@ include { SKIP_GET_ANCHORS  } from '../subworkflows/local/skip_get_anchors'
 //
 // MODULE: Installed directly from nf-core/modules
 //
+include { TRIMGALORE                } from '../../modules/nf-core/modules/trimgalore/main'
 
 /*
 ========================================================================================
@@ -60,28 +63,108 @@ include { SKIP_GET_ANCHORS  } from '../subworkflows/local/skip_get_anchors'
 
 workflow STRINGSTATS {
 
+     // Parse samplesheet
+    Channel
+        .fromPath(params.input)
+        .splitCsv(
+            header: false
+        )
+        .map { row ->
+            tuple(
+                file(row[0]).simpleName,
+                file(row[0]),
+                row[1]
+            )
+        }
+        .set{ ch_fastqs }
+
+    // Define lookahead parameter
+    if (params.use_read_length) {
+        /*
+        // Get read length of dataset
+        */
+        GET_READ_LENGTH(
+            ch_fastqs.first()
+        )
+        read_length = GET_READ_LENGTH.out.read_length.toInteger()
+        lookahead = ((read_length - 2 * params.kmer_size) / 2).toInteger()
+
+    } else {
+        lookahead = params.lookahead
+    }
+
+    /*
+    // Trim fastqs
+    */
+    TRIMGALORE(
+        ch_fastqs
+    )
+
+    ch_fastqs = TRIMGALORE.out.fastqs
+
     if (params.anchors_file) {
 
-        SKIP_GET_ANCHORS()
+        SKIP_GET_ANCHORS(
+            ch_fastqs,
+            lookahead
+        )
 
     } else {
 
-        if (params.reannotate) {
-            // Re-annotate anchors and targets
-            ANNOTATE(
-                params.anchor_target_counts
+        /*
+        // Check if we are only using unmapped reads
+        */
+        if (params.unmapped) {
+            /*
+            // Get unmapped reads
+            */
+            GET_UNMAPPED(
+                ch_fastqs,
+                params.index_bowtie
             )
 
-        } else {
-            // Perform analysis on anchors and targets
-            ANALYZE_FASTQS()
+            ch_fastqs = GET_UNMAPPED.out.fastq
 
-            // Annotate anchors and targets
-            ANNOTATE(
-                ANALYZE_FASTQS.out.anchor_target_counts,
-                ANALYZE_FASTQS.out.anchor_scores
-            )
         }
+
+        /*
+        // Process anchors and targets
+        */
+        ANCHORS(
+            ch_fastqs,
+            lookahead
+        )
+
+        abundant_anchors = ANCHORS.out.abundant_anchors
+
+        if (params.run_type == "bulk") {
+            // Perform analysis on anchors and targets
+            ANALYZE_BULK(
+                ch_fastqs,
+                lookahead,
+                abundant_anchors
+            )
+
+            ch_target_counts = ANALYZE_BULK.out.anchor_target_counts
+            ch_anchors_scores = ANALYZE_BULK.out.anchor_scores
+
+        } else if (params.run_type == "10X") {
+            // Perform analysis on anchors and targets
+            ANALYZE_10X(
+                ch_fastqs,
+                lookahead,
+                abundant_anchors
+            )
+
+            anchor_target_counts = ANALYZE_10X.out.anchor_target_counts
+            anchors_scores = ANALYZE_10X.out.anchor_scores
+        }
+
+        // Annotate anchors and targets
+        ANNOTATE(
+            anchor_target_counts,
+            anchor_scores
+        )
 
     }
 }

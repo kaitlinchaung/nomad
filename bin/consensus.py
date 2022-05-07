@@ -50,7 +50,7 @@ def build_consensus(kmers, consensus_length, direction):
     return baseComp, baseCount, baseFrac
 
 
-def get_targets_consensus_seqs(consensus_only, fastq_file, num_parse_anchors_reads, anchor_dict, consensus_length, kmer_size, lookahead, direction):
+def get_targets_consensus_seqs(fastq_file, num_parse_anchors_reads, anchor_dict, consensus_length, kmer_size, lookahead, direction):
     """
     For each read, check if there are any valid targets and/or consensus sequences,
     and append them to their respective dictionaries
@@ -89,39 +89,35 @@ def get_targets_consensus_seqs(consensus_only, fastq_file, num_parse_anchors_rea
 
                         # fetch sequences, relative to position
                         if direction == 'down':
-                            if not consensus_only:
-                                # get downstream target start and end positions
-                                target_start = anchor_end + lookahead
-                                target_end = target_start + kmer_size
+                            # get downstream target start and end positions
+                            target_start = anchor_end + lookahead
+                            target_end = target_start + kmer_size
 
                             # get downstream consensus start and end positions
                             consensus_seq_start = anchor_end
                             consensus_seq_end = consensus_seq_start + consensus_length
 
                         if direction == 'up':
-                            if not consensus_only:
-                                # get upstream target stand and end positions
-                                target_end = anchor_start - lookahead
-                                target_start = max(0, anchor_end - (kmer_size + lookahead))
+                            # get upstream target stand and end positions
+                            target_end = anchor_start - lookahead
+                            target_start = max(0, anchor_end - (kmer_size + lookahead))
 
                             # get upstream consensus start and end positions
                             consensus_seq_end = anchor_start
                             consensus_seq_start = max(0, consensus_seq_end - consensus_length)
 
                         # define target and consensus sequences
-                        if not consensus_only:
-                            target = read[target_start : target_end]
+                        target = read[target_start : target_end]
                         consensus_seq = read[consensus_seq_start:consensus_seq_end]
 
                         # if target is large enough, add it to the target_dict
-                        if not consensus_only:
-                            if len(target) == kmer_size:
-                                anchor_tuple = (anchor, target)
+                        if len(target) == kmer_size:
+                            anchor_tuple = (anchor, target)
 
-                                if anchor_tuple not in target_dict:
-                                    target_dict[anchor_tuple] = 1
-                                else:
-                                    target_dict[anchor_tuple] += 1
+                            if anchor_tuple not in target_dict:
+                                target_dict[anchor_tuple] = 1
+                            else:
+                                target_dict[anchor_tuple] += 1
 
                         # if we have less than 100 candidate consensus sequences, add it to the consensus_dict
                         if len(consensus_dict[anchor]) < 100:
@@ -175,10 +171,6 @@ def output_consensus(consensus_dict, consensus_length, direction, out_consensus_
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--consensus_only",
-        action='store_true'
-    )
     parser.add_argument(
         "--num_parse_anchors_reads",
         type=int,
@@ -268,6 +260,7 @@ def main():
         pd.read_csv(args.anchors_file, sep='\t', header=None)
         .iloc[:,0]
         .drop_duplicates()
+        .head(10000)
         .tolist()
     )
 
@@ -278,7 +271,6 @@ def main():
 
     # get all of the next kmers for the anchors in PREPARATION FOR BUILDING CONCENSUS
     target_dict, consensus_dict = get_targets_consensus_seqs(
-        args.consensus_only,
         args.fastq_file,
         args.num_parse_anchors_reads,
         anchor_dict,
@@ -290,33 +282,32 @@ def main():
 
     logging.info(f'Finished target fetching')
 
-    if not args.consensus_only:
-        if not all(map(lambda x: x == [], target_dict.values())):
-            # write out anchor dict for merging later
-            anchor_df = (
-                pd.DataFrame.from_dict(target_dict, orient='index')
-                .reset_index()
-                .dropna()
+    if not all(map(lambda x: x == [], target_dict.values())):
+        # write out anchor dict for merging later
+        anchor_df = (
+            pd.DataFrame.from_dict(target_dict, orient='index')
+            .reset_index()
+            .dropna()
+        )
+
+        # reformat such that there are is a column of counts per anchor-target,
+        # where the column is the fastq_id
+        anchor_df.columns = ['anchor_tuple', args.fastq_id]
+        anchor_df[['anchor', 'target']] = (
+            pd.DataFrame(
+                anchor_df['anchor_tuple'].tolist(),
+                index=anchor_df.index
             )
+        )
 
-            # reformat such that there are is a column of counts per anchor-target,
-            # where the column is the fastq_id
-            anchor_df.columns = ['anchor_tuple', args.fastq_id]
-            anchor_df[['anchor', 'target']] = (
-                pd.DataFrame(
-                    anchor_df['anchor_tuple'].tolist(),
-                    index=anchor_df.index
-                )
-            )
+        # final output columns
+        anchor_df = anchor_df[['anchor', 'target', args.fastq_id]]
 
-            # final output columns
-            anchor_df = anchor_df[['anchor', 'target', args.fastq_id]]
+    else:
+        anchor_df = pd.DataFrame(columns=['anchor', 'target', args.fastq_id])
 
-        else:
-            anchor_df = pd.DataFrame(columns=['anchor', 'target', args.fastq_id])
-
-        # output anchor-target counts for this fastq
-        anchor_df.to_csv(args.out_target_file, index=False, sep='\t')
+    # output anchor-target counts for this fastq
+    anchor_df.to_csv(args.out_target_file, index=False, sep='\t')
 
     logging.info(f'Starting consensus building')
     # build and output the consensus files

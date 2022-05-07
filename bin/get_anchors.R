@@ -180,6 +180,7 @@ if (dim(m)[1]>0){
     m[ ,target.count := sum(counts), by=anchor]
     ## get per target counts
     m[ ,pertarget.counts := sum(counts), by=list(target,anchor)]
+
     print("STARTING GET DISTANCES");
     for (anch in unique(m$anchor)){
         ## gives the total number of targets
@@ -191,9 +192,10 @@ if (dim(m)[1]>0){
         ## gets list of distances from unique list of targets
 
         target.d = get_distances(tlist, distance_type, max_distance,  chunk_size)
- if (anch %like% "GGG"){print(anch)}
+        #  if (anch %like% "GGG"){print(anch)}
         ## CREATE A NEW DATAFRAME AND ADD ANCHOR ID
         into = data.table(cbind (tlist,as.numeric(target.d)))
+
         names(into) = c("target", "target.d")
         into[,anchor := anch]
 
@@ -293,13 +295,27 @@ compute.a = (compute.a[anchor.var>.5][mu>1][order(-l1.sdlike.units)])
 summary.file = unique(compute.a[order(-l1.sdlike.units)])
 write.table(summary.file, outfile_scores, col.names=T, row.names=F, quote=F, sep='\t')
 
-print(head(summary.file))
-
 ## write out significant anchors
 anchors = summary.file[bf.cor.p < pval_threshold]
 anchors = head(unique(summary.file[order(bf.cor.p, decreasing=T), "anchor"]), 1000)
 
+if (run_type == '10x'){
+    ## output contingency table
+    ctable = m[, c('anchor', 'target', 'sample', 'pertarget.counts')]
+    colnames(ctable) <- c('anchor', 'target', 'sample', 'count')
+    ctable = dcast(melt(ctable), anchor+target ~ sample, fill=0, id.vars=count)
+    ctable = merge(anchors, ctable, by='anchor')
+    write.table(ctable, 'anchor_target_counts.tsv', col.names=T, row.names=F, quote=F, sep='\t')
+
+    ## output top 3 targets by abundance per anchior
+    ctable[, total_count := rowSums(ctable[, -c(1,2)])]
+    c_mod <- ctable[order(total_count, decreasing=T),]
+    c_mod <- data.table(c_mod, key='anchor')
+    c_mod <- c_mod[, head(.SD, 3), by='anchor']
+    top_targets <- c_mod[, c('target')]
+    write.table(top_targets, 'top_targets.tsv', col.names=F, row.names=F, quote=F, sep='\t')
+}
+
 write.table(anchors, outfile_anchors, col.names=F, row.names=F, quote=F, sep='\t')
 write.table(file=paste("cmx_",outfile_anchors,sep=""), c.mx, col.names=F, row.names=F, quote=F, sep='\t')
 
-write.table(file=paste("cmx_",outfile_anchors,sep=""), c.mx, col.names=F, row.names=F, quote=F, sep='\t')
