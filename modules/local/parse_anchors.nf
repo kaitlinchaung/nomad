@@ -7,7 +7,7 @@ process PARSE_ANCHORS {
 
     input:
     tuple val(fastq_id), path(fastq), val(group_id)
-    path anchors
+    tuple path(seqs), val(seq_id)
     val num_parse_anchors_reads
     val consensus_length
     val kmer_size
