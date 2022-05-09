@@ -3,7 +3,7 @@ include { GET_ANCHORS_AND_SCORES    } from '../../modules/local/get_anchors_and_
 include { PARSE_ANCHORS             } from '../../modules/local/parse_anchors'
 include { MERGE_TARGET_COUNTS       } from '../../modules/local/merge_target_counts'
 
-workflow ANALYZE_FASTQS_BULK {
+workflow ANALYZE_BULK {
 
     take:
     ch_fastqs

@@ -2,7 +2,7 @@ include { GET_ANCHORS_AND_SCORES    } from '../../modules/local/get_anchors_and_
 include { PARSE_ANCHORS             } from '../../modules/local/parse_anchors'
 include { MERGE_TARGET_COUNTS       } from '../../modules/local/merge_target_counts'
 
-workflow ANALYZE_FASTQS_10X {
+workflow ANALYZE_10X {
 
     take:
     ch_fastqs
@@ -25,9 +25,31 @@ workflow ANALYZE_FASTQS_10X {
         params.run_type
     )
 
-    ch_anchors  = GET_ANCHORS_AND_SCORES.out.anchors.filter{ it.size() > 0 }
-    ch_scores   = GET_ANCHORS_AND_SCORES.out.scores
+    // Merge all anchors from all slices and output
+    GET_ANCHORS_AND_SCORES.out.anchor_target_counts
+        .collectFile(
+            name: 'anchor_target_counts.tsv',
+            storeDir: "${params.outdir}"
+        )
+        .set{anchor_target_counts}
 
+    // Merge all scores from all slices and output
+    GET_ANCHORS_AND_SCORES.out.scores
+        .collectFile(
+            name: 'scores.tsv',
+            storeDir: "${params.outdir}"
+        )
+        .set{ch_scores}
+
+    // Merge all anchors from all slices and output
+    GET_ANCHORS_AND_SCORES.out.anchors
+        .collectFile(
+            name: 'anchors.tsv',
+            storeDir: "${params.outdir}"
+        )
+        .set{ch_anchors}
+
+    ch_anchors = ch_anchors.first().filter{ it.size() >0 }
 
     /*
     // Process to get consensus sequences and target counts for annchors
@@ -40,13 +62,12 @@ workflow ANALYZE_FASTQS_10X {
         params.kmer_size,
         params.direction,
         lookahead,
-        
+
     )
 
-    
 
     emit:
-    anchor_target_counts = MERGE_TARGET_COUNTS.out.anchor_target_counts.first()
+    anchor_target_counts = anchor_target_counts
     anchor_scores        = ch_scores
 
 }

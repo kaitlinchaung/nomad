@@ -30,15 +30,16 @@ def modules = params.modules.clone()
 // MODULE: Local to the pipeline
 //
 include { GET_SOFTWARE_VERSIONS     } from '../modules/local/get_software_versions' addParams( options: [publish_files : ['tsv':'']] )
-include { GET_READ_LENGTH           } from '../../modules/local/get_read_length'
-include { GET_UNMAPPED              } from '../../modules/local/get_unmapped'
+include { GET_READ_LENGTH           } from '../modules/local/get_read_length'
+include { GET_UNMAPPED              } from '../modules/local/get_unmapped'
 
 
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
+include { ANCHORS           } from '../subworkflows/local/anchors'
 include { ANALYZE_BULK      } from '../subworkflows/local/analyze_bulk'
-include { ANALYZE_10X    } from '../subworkflows/local/analyze_10X'
+include { ANALYZE_10X       } from '../subworkflows/local/analyze_10X'
 include { ANNOTATE          } from '../subworkflows/local/annotate'
 include { SKIP_GET_ANCHORS  } from '../subworkflows/local/skip_get_anchors'
 
@@ -51,7 +52,7 @@ include { SKIP_GET_ANCHORS  } from '../subworkflows/local/skip_get_anchors'
 //
 // MODULE: Installed directly from nf-core/modules
 //
-include { TRIMGALORE                } from '../../modules/nf-core/modules/trimgalore/main'
+include { TRIMGALORE        } from '../modules/nf-core/modules/trimgalore/main'
 
 /*
 ========================================================================================
@@ -100,7 +101,7 @@ workflow STRINGSTATS {
         ch_fastqs
     )
 
-    ch_fastqs = TRIMGALORE.out.fastqs
+    ch_fastqs = TRIMGALORE.out.fastq
 
     if (params.anchors_file) {
 
@@ -145,8 +146,8 @@ workflow STRINGSTATS {
                 abundant_anchors
             )
 
-            ch_target_counts = ANALYZE_BULK.out.anchor_target_counts
-            ch_anchors_scores = ANALYZE_BULK.out.anchor_scores
+            anchor_target_counts = ANALYZE_BULK.out.anchor_target_counts
+            anchor_scores = ANALYZE_BULK.out.anchor_scores
 
         } else if (params.run_type == "10X") {
             // Perform analysis on anchors and targets
@@ -157,7 +158,7 @@ workflow STRINGSTATS {
             )
 
             anchor_target_counts = ANALYZE_10X.out.anchor_target_counts
-            anchors_scores = ANALYZE_10X.out.anchor_scores
+            anchor_scores = ANALYZE_10X.out.anchor_scores
         }
 
         // Annotate anchors and targets
