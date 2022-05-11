@@ -11,6 +11,10 @@ def get_args():
         type=str
     )
     parser.add_argument(
+        "--fastq_id",
+        type=str
+    )
+    parser.add_argument(
         "--stratify_level",
         type=int
     )

@@ -7,13 +7,13 @@ process COUNT_ANCHORS {
     tuple val(fastq_id), path(fastq), val(group_id)
 
     output:
-    path outfile, emit: seqs
+    tuple val(fastq_id), path(counts)
 
     script:
-    outfile = "counted_${fastq_id}.txt"
+    counts = "counted_${fastq_id}.txt"
     """
     zcat ${fastq} \\
         | sort \\
-        | uniq -c > ${outfile}
+        | uniq -c > ${counts}
     """
 }

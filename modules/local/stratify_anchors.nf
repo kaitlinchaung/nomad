@@ -5,7 +5,7 @@ process STRATIFY_ANCHORS {
     conda (params.enable_conda ? "conda-forge::python=3.9.5" : null)
 
     input:
-    path counts
+    tuple val(fastq_id), path(counts)
     val stratify_level
 
     output:
@@ -13,11 +13,8 @@ process STRATIFY_ANCHORS {
 
     script:
     """
-    for file in counted*txt
-    do
-        stratify_anchors.py \\
-            --infile \${file} \\
-            --stratify_level ${stratify_level}
-    done
+    stratify_anchors.py \\
+        --infile \${counts} \\
+        --stratify_level ${stratify_level}
     """
 }
